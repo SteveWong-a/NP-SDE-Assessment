@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabaseClient.ts' 
 
+
 //match supabase schema
 interface Task {
   id: string
@@ -21,6 +22,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [newTaskTitle, setNewTaskTitle] = useState('')
 
   useEffect(() => {
     const initializeGuestSession = async () => {
@@ -57,6 +59,34 @@ export default function App() {
     }
   }
 
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault() //prevents page refresh when submit form
+
+    //Don't create new tasp if input is empty or user not loaded
+    if(!newTaskTitle.trim() || !userId) return
+    
+    const {data, error } = await supabase
+      .from('tasks')
+      .insert([
+        {
+          title: newTaskTitle,
+          status: 'todo',
+          user_id: userId,
+        }
+      ])
+      .select() //Call Supabase to return the newly created row
+
+    if (error) {
+      console.error('Error adding task:', error)
+    } else if (data){
+      setTasks([...tasks, data[0]])
+      //clear input field for next task
+      setNewTaskTitle('')
+    }
+
+  }
+
+
   //handling loading state
   if(isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading board...</div>
@@ -64,10 +94,28 @@ export default function App() {
 
   return (
     <div className = "min-h-screen bg-gray-100 p-8 text-gray-900">
-      <header className="mb-8">
+      <header className="mb-8 flex justify-between items-end">
         <h1 className="text-3xl font-bold tracking-tight">Kanban Board</h1>
-        </header>
-    
+
+        {/*New Task Form*/}
+        <form onSubmit={handleAddTask} className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Plan a task..."
+            value={newTaskTitle}
+
+            onChange={(e) => setNewTaskTitle(e.target.value)}
+            className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+          />
+          <button
+            type="submit"
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 font-medium transition-colors"
+          >
+            Create Task
+          </button>
+        </form>
+      </header>
+
     <div className="flex gap-6 overflow-x-auto pb-4">
 
         {COLUMNS.map((col) => (
