@@ -401,12 +401,14 @@ export default function App() {
                                   max="100"
                                   value={task.progress || 0}
                                   onChange={(e) => handleProgressUpdate(task, parseInt(e.target.value))}
-                                  className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer transition-colors
-                                    ${(!task.progress || task.progress === 0) ? 'bg-gray-200' : 
-                                      task.progress === 100 ? 'bg-green-200' : 'bg-orange-200'}`}
+                                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer transition-colors"
                                   style={{ 
-                                    accentColor: task.progress === 100 ? '#4ade80' : 
-                                                (!task.progress || task.progress === 0) ? '#9ca3af' : '#fb923c' 
+                                    accentColor: (!task.progress || task.progress === 0) 
+                                      ? '#9ca3af' // Grey at 0%
+                                      : `hsl(${210 - (task.progress * 0.6)}, 80%, 45%)`, // Blue (210) to Mint (150)
+                                    backgroundColor: (!task.progress || task.progress === 0)
+                                      ? '#e5e7eb' 
+                                      : `hsl(${210 - (task.progress * 0.6)}, 80%, 85%)` // Matching pastel track
                                   }}
                                 />
                               </div>
