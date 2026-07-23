@@ -25,19 +25,23 @@ Make sure you have [Node.js](https://nodejs.org/) installed on your machine.
 ```bash
 git clone [https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git](https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git)
 cd YOUR_REPO_NAME
+```
 
 
 ### 2. Install dependencies
+```bash
 npm install
-
+```
 
 ### 3. Environment variables
+```bash
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-
+```
 
 ### 4. Run the development server
+```bash
 npm run dev
-
+```
 
 Open http://localhost:5173 in your browser to view the app.
