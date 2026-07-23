@@ -1,4 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from './lib/supabaseClient.ts' 
+
+//match supabase schema
+interface Task {
+  id: string
+  title: string
+  status: 'todo' | 'in_progress' | 'in_review' | 'done'
+  user_id: string
+}
 
 const COLUMNS = [
   { id: 'todo', title: 'To Do'},
@@ -9,6 +18,50 @@ const COLUMNS = [
 
 //Kanban Dashboard 
 export default function App() {
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [userId, setUserId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const initializeGuestSession = async () => {
+      try {
+        //guest sign in
+        const { data: authData, error: authError } = await supabase.auth.signInAnonymously()
+        
+        if(authError) throw authError
+        if(authData.user) {
+          setUserId(authData.user.id)
+          //function fetch task for user
+          fetchTasks(authData.user.id)
+        }
+      } catch (error) {
+        console.error("Error initializing session: ", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    initializeGuestSession()
+  }, [])
+
+  const fetchTasks = async (uid: string) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', uid)
+    
+    if (error) {
+      console.error('Error fetching tasks:', error)
+    } else {
+      setTasks(data || [])
+    }
+  }
+
+  //handling loading state
+  if(isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading board...</div>
+  }
+
   return (
     <div className = "min-h-screen bg-gray-100 p-8 text-gray-900">
       <header className="mb-8">
