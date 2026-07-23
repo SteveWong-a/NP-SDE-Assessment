@@ -13,7 +13,7 @@ const COLUMNS = [
   { id: 'todo', title: 'To Do'},
   { id: 'in_progress', title: 'In Progress'},
   { id: 'in_review', title: 'In Review'},
-  { id: 'done', title: 'done'},
+  { id: 'done', title: 'Done'},
 ]
 
 //Kanban Dashboard 
@@ -72,8 +72,8 @@ export default function App() {
 
         {COLUMNS.map((col) => (
           <div
-            key={col.id}
-            className="flex-shrink-0 w-80 bg-gray-200/50 rounded-l p-4 flex flex-col"
+            key={col.id} //Column background settings
+            className="flex-shrink-0 w-80 h-150 bg-gray-200/50 rounded-l p-4 flex flex-col" 
           >
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-semibold">{col.title}</h2>
