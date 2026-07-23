@@ -11,14 +11,43 @@ interface Task {
   due_date?: string
   status: 'todo' | 'in_progress' | 'in_review' | 'done'
   user_id: string
+  labels?: string[] 
+  progress?: number 
 }
-
 const COLUMNS = [
   { id: 'todo', title: 'To Do'},
   { id: 'in_progress', title: 'In Progress'},
   { id: 'in_review', title: 'In Review'},
   { id: 'done', title: 'Done'},
 ]
+
+const getRelativeTime = (dateString: string) => {
+  const due = new Date(dateString)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  due.setHours(0, 0, 0, 0)
+  
+  const diffTime = due.getTime() - today.getTime()
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  const absDays = Math.abs(diffDays)
+  
+  if (diffDays === 0) return "Today"
+  
+  const isFuture = diffDays > 0
+  let timeStr = ""
+  
+  if (absDays < 7) {
+    timeStr = `${absDays} day${absDays > 1 ? 's' : ''}`
+  } else if (absDays < 30) {
+    const weeks = Math.floor(absDays / 7)
+    timeStr = `${weeks} week${weeks > 1 ? 's' : ''}`
+  } else {
+    const months = Math.floor(absDays / 30)
+    timeStr = `${months} month${months > 1 ? 's' : ''}`
+  }
+  
+  return isFuture ? `in ${timeStr}` : `${timeStr} ago`
+}
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -41,6 +70,12 @@ export default function App() {
   const [filterPriority, setFilterPriority] = useState('all')
   // Default calming landscape background from Unsplash (Lago di Braies)
   const [bgImage, setBgImage] = useState('https://unsplash.com/photos/9oaAOwjAM48/download?w=2000')
+
+  //Labels 
+  const [newTaskLabels, setNewTaskLabels] = useState<string[]>([]) 
+  const [newLabelInput, setNewLabelInput] = useState('')
+  const [editLabelInput, setEditLabelInput] = useState('')
+  const [filterLabel, setFilterLabel] = useState('')
 
   useEffect(() => {
     const initializeGuestSession = async () => {
@@ -86,6 +121,7 @@ export default function App() {
           description: newTaskDesc,
           priority: newTaskPriority,
           due_date: newTaskDueDate || null,
+          labels: newTaskLabels,
           status: 'todo',
           user_id: userId,
         }
@@ -100,6 +136,7 @@ export default function App() {
       setNewTaskDesc('')
       setNewTaskPriority('normal')
       setNewTaskDueDate('')
+      setNewTaskLabels([])
       setIsCreateModalOpen(false) // Close the modal on success
     }
   }
@@ -116,6 +153,7 @@ export default function App() {
         description: editingTask.description,
         priority: editingTask.priority,
         due_date: editingTask.due_date || null,
+        labels: editingTask.labels,
       })
       .eq('id', editingTask.id)
       .select()
@@ -126,6 +164,19 @@ export default function App() {
       setTasks(tasks.map(t => t.id === editingTask.id ? data[0] : t))
       setEditingTask(null)
     }
+  }
+
+  const handleProgressUpdate = async (task: Task, newProgress: number) => {
+    // Optimistic UI update for snappy feel
+    setTasks(tasks.map(t => t.id === task.id ? { ...t, progress: newProgress } : t))
+    
+    // Background database update
+    const { error } = await supabase
+      .from('tasks')
+      .update({ progress: newProgress })
+      .eq('id', task.id)
+      
+    if (error) console.error("Error updating progress:", error)
   }
 
   const onDragEnd = async (result: DropResult) => {
@@ -175,11 +226,14 @@ export default function App() {
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesPriority = filterPriority === 'all' || task.priority === filterPriority
-    return matchesSearch && matchesPriority
+    
+    // Check if the task has labels and if it matches the filter
+    const matchesLabel = filterLabel === '' || (task.labels && task.labels.some(l => l.toLowerCase().includes(filterLabel.toLowerCase())))
+    
+    return matchesSearch && matchesPriority && matchesLabel
   })
 
-  // Check if any filters are actively applied
-  const isFilterActive = searchQuery !== '' || filterPriority !== 'all'
+  const isFilterActive = searchQuery !== '' || filterPriority !== 'all' || filterLabel !== ''
 
   if(isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-gray-800 font-medium">Loading board...</div>
@@ -195,7 +249,7 @@ export default function App() {
       
       {/* Content wrapper ensuring z-index stays above overlay */}
       <div className="relative z-10 max-w-[1400px] mx-auto">
-        <header className="mb-8">
+        <header className="mb-8 relative z-50">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-4xl font-bold tracking-tight text-gray-900 drop-shadow-sm">Kanban Board</h1>
             
@@ -241,6 +295,15 @@ export default function App() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
                   />
+
+                  <input 
+                    type="text" 
+                    placeholder="🏷️ Filter by label..." 
+                    value={filterLabel}
+                    onChange={(e) => setFilterLabel(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
+                  />
+                  
                   <select 
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value)}
@@ -265,8 +328,10 @@ export default function App() {
                 return (          
                 <div
                   key={col.id}
-                  className="flex-shrink-0 w-80 min-h-[60vh] bg-white/40 backdrop-blur-md border border-white/60 shadow-lg rounded-xl p-4 flex flex-col h-full" 
+                  className="relative z-0 flex-shrink-0 w-80 min-h-[60vh] bg-white/40 border border-white/60 shadow-lg rounded-xl p-4 flex flex-col h-full" 
                 >
+                  <div className="absolute inset-0 backdrop-blur-md rounded-xl -z-10 pointer-events-none"></div>
+
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="font-bold text-gray-800">{col.title}</h2>
                     <span className="bg-white/60 text-gray-800 shadow-sm text-xs font-bold px-2.5 py-1 rounded-full">
@@ -308,14 +373,49 @@ export default function App() {
                                   </button>
                                 </div>
                               </div>
+
+                              {/* Label Display */}
+                              {task.labels && task.labels.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                  {task.labels.map((label, i) => (
+                                    <span key={i} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-md font-medium">
+                                      {label}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                               
                               {task.description && (
                                 <p className="text-xs text-gray-500 line-clamp-2 mb-3">{task.description}</p>
                               )}
                               
+                              {/* Progress Bar */}
+                              <div className="mt-3 mb-1 group/slider">
+                                <div className="flex justify-between text-[10px] text-gray-400 font-medium mb-1 opacity-0 group-hover/slider:opacity-100 transition-opacity">
+                                  <span>Progress</span>
+                                  <span>{task.progress || 0}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  value={task.progress || 0}
+                                  onChange={(e) => handleProgressUpdate(task, parseInt(e.target.value))}
+                                  className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer transition-colors
+                                    ${(!task.progress || task.progress === 0) ? 'bg-gray-200' : 
+                                      task.progress === 100 ? 'bg-green-200' : 'bg-orange-200'}`}
+                                  style={{ 
+                                    accentColor: task.progress === 100 ? '#4ade80' : 
+                                                (!task.progress || task.progress === 0) ? '#9ca3af' : '#fb923c' 
+                                  }}
+                                />
+                              </div>
+                              
+                              {/* Advanced Relative Due Date */}
                               {task.due_date && (
-                                <div className={`flex items-center text-xs font-medium mt-2 pt-2 border-t border-gray-100 ${isOverdue ? 'text-red-600' : 'text-gray-400'}`}>
-                                  <span>{isOverdue ? '⚠️ Overdue: ' : '📅 Due: '}{new Date(task.due_date).toLocaleDateString()}</span>
+                                <div className={`flex justify-between items-center text-xs font-medium mt-3 pt-2 border-t border-gray-100 ${isOverdue ? 'text-red-600' : 'text-gray-400'}`}>
+                                  <span>{isOverdue ? '⚠️ Overdue' : '📅 Due'}</span>
+                                  <span>{new Date(task.due_date).toLocaleDateString()} ({getRelativeTime(task.due_date)})</span>
                                 </div>
                               )}
                             </div>
@@ -369,7 +469,53 @@ export default function App() {
                   className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              
+
+              {/*Label selector*/}
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Add a label..."
+                    value={newLabelInput}
+                    onChange={(e) => setNewLabelInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (newLabelInput.trim() && !newTaskLabels.includes(newLabelInput.trim())) {
+                          setNewTaskLabels([...newTaskLabels, newLabelInput.trim()])
+                        }
+                        setNewLabelInput('')
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      if (newLabelInput.trim() && !newTaskLabels.includes(newLabelInput.trim())) {
+                        setNewTaskLabels([...newTaskLabels, newLabelInput.trim()])
+                      }
+                      setNewLabelInput('')
+                    }}
+                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-bold transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+                
+                {/* Render Label Pills */}
+                {newTaskLabels.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {newTaskLabels.map(label => (
+                      <span key={label} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md flex items-center gap-1 font-medium border border-blue-200">
+                        {label}
+                        <button type="button" onClick={() => setNewTaskLabels(newTaskLabels.filter(l => l !== label))} className="text-blue-500 hover:text-blue-800 ml-1">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <textarea
                 placeholder="Add a description..."
                 value={newTaskDesc}
@@ -430,9 +576,62 @@ export default function App() {
                   className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+                {/*  Label Input with Pills for Editing */}
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Add a label..."
+                    value={editLabelInput}
+                    onChange={(e) => setEditLabelInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (editLabelInput.trim()) {
+                          const currentLabels = editingTask.labels || []
+                          if (!currentLabels.includes(editLabelInput.trim())) {
+                            setEditingTask({ ...editingTask, labels: [...currentLabels, editLabelInput.trim()] })
+                          }
+                        }
+                        setEditLabelInput('')
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      if (editLabelInput.trim()) {
+                        const currentLabels = editingTask.labels || []
+                        if (!currentLabels.includes(editLabelInput.trim())) {
+                          setEditingTask({ ...editingTask, labels: [...currentLabels, editLabelInput.trim()] })
+                        }
+                      }
+                      setEditLabelInput('')
+                    }}
+                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-bold transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+                
+                {/* Render Label Pills */}
+                {editingTask.labels && editingTask.labels.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {editingTask.labels.map(label => (
+                      <span key={label} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md flex items-center gap-1 font-medium border border-blue-200">
+                        {label}
+                        <button type="button" onClick={() => setEditingTask({...editingTask, labels: editingTask.labels!.filter(l => l !== label)})} className="text-blue-500 hover:text-blue-800 ml-1">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               
               <textarea
                 value={editingTask.description || ''}
+                placeholder='Description'
                 onChange={(e) => setEditingTask({...editingTask, description: e.target.value})}
                 className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none h-24"
               />
