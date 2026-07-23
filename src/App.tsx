@@ -86,7 +86,6 @@ export default function App() {
 
   }
 
-
   //handling loading state
   if(isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading board...</div>
@@ -115,31 +114,42 @@ export default function App() {
           </button>
         </form>
       </header>
+    
 
     <div className="flex gap-6 overflow-x-auto pb-4">
+        {COLUMNS.map((col) => {
+          const columnTasks = tasks.filter(task => task.status === col.id)
 
-        {COLUMNS.map((col) => (
+          return (          
           <div
             key={col.id} //Column background settings
-            className="flex-shrink-0 w-80 h-150 bg-gray-200/50 rounded-l p-4 flex flex-col" 
+
+            className="flex-shrink-0 w-80 h-150 bg-gray-200/50 rounded-xl p-4 flex flex-col" 
           >
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-semibold">{col.title}</h2>
-              {/*Optional Element -> Adding task counter badge later */}
+              {/*Task counter badge  */}
+              <span className="bg-gray-300 text-gray-700 text-xs font-bold px-2 py-1 rounded-full">
+                {columnTasks.length}
+              </span>
             </div>
 
 
             <div className="flex-1 min-h-[200px] flex flex-col gap-3">
-
-              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <p className="text-sm font-medium">Example Task</p>
-              </div>
-            
+              {columnTasks.length === 0 ? (
+                <div className="text-sm text-gray-500 italic text-center mt-4">No tasks yet</div>
+              ) : (
+                columnTasks.map(task => (
+                  <div key={task.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <p className="text-sm font-medium">{task.title}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
-        ))}
-
-      </div>
+          )  
+        })}
     </div>
+  </div>
   )
 }
