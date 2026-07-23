@@ -328,7 +328,7 @@ export default function App() {
                 return (          
                 <div
                   key={col.id}
-                  className="relative z-0 flex-shrink-0 w-80 min-h-[60vh] bg-white/40 border border-white/60 shadow-lg rounded-xl p-4 flex flex-col h-full" 
+                  className="relative z-0 flex-1 min-w-[280px] min-h-[60vh] bg-white/40 border border-white/60 shadow-lg rounded-xl p-4 flex flex-col h-full" 
                 >
                   <div className="absolute inset-0 backdrop-blur-md rounded-xl -z-10 pointer-events-none"></div>
 
