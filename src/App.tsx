@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { supabase } from './lib/supabaseClient.ts' 
-
+import { supabase } from './lib/supabaseClient.ts'
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 
 //match supabase schema
 interface Task {
@@ -11,10 +11,10 @@ interface Task {
 }
 
 const COLUMNS = [
-  { id: 'todo', title: 'To Do'},
-  { id: 'in_progress', title: 'In Progress'},
-  { id: 'in_review', title: 'In Review'},
-  { id: 'done', title: 'Done'},
+  { id: 'todo', title: 'To Do' },
+  { id: 'in_progress', title: 'In Progress' },
+  { id: 'in_review', title: 'In Review' },
+  { id: 'done', title: 'Done' },
 ]
 
 //Kanban Dashboard 
@@ -29,9 +29,9 @@ export default function App() {
       try {
         //guest sign in
         const { data: authData, error: authError } = await supabase.auth.signInAnonymously()
-        
-        if(authError) throw authError
-        if(authData.user) {
+
+        if (authError) throw authError
+        if (authData.user) {
           setUserId(authData.user.id)
           //function fetch task for user
           fetchTasks(authData.user.id)
@@ -51,7 +51,7 @@ export default function App() {
       .from('tasks')
       .select('*')
       .eq('user_id', uid)
-    
+
     if (error) {
       console.error('Error fetching tasks:', error)
     } else {
@@ -63,9 +63,9 @@ export default function App() {
     e.preventDefault() //prevents page refresh when submit form
 
     //Don't create new tasp if input is empty or user not loaded
-    if(!newTaskTitle.trim() || !userId) return
-    
-    const {data, error } = await supabase
+    if (!newTaskTitle.trim() || !userId) return
+
+    const { data, error } = await supabase
       .from('tasks')
       .insert([
         {
@@ -78,7 +78,7 @@ export default function App() {
 
     if (error) {
       console.error('Error adding task:', error)
-    } else if (data){
+    } else if (data) {
       setTasks([...tasks, data[0]])
       //clear input field for next task
       setNewTaskTitle('')
@@ -86,13 +86,40 @@ export default function App() {
 
   }
 
+  const onDragEnd = async (result: DropResult) => {
+    const { destination, source, draggableId } = result
+
+    if (!destination) return
+
+    if (destination.droppableId === source.droppableId) return
+
+    const newStatus = destination.droppableId as Task['status']
+
+
+    setTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === draggableId ? { ...task, status: newStatus } : task
+      )
+    )
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status: newStatus })
+      .eq('id', draggableId)
+
+    if (error) {
+      console.error('Error updating task status:', error)
+    }
+
+  }
+
   //handling loading state
-  if(isLoading) {
+  if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading board...</div>
   }
 
   return (
-    <div className = "min-h-screen bg-gray-100 p-8 text-gray-900">
+    <div className="min-h-screen bg-gray-100 p-8 text-gray-900">
       <header className="mb-8 flex justify-between items-end">
         <h1 className="text-3xl font-bold tracking-tight">Kanban Board</h1>
 
@@ -114,42 +141,57 @@ export default function App() {
           </button>
         </form>
       </header>
-    
 
-    <div className="flex gap-6 overflow-x-auto pb-4">
-        {COLUMNS.map((col) => {
-          const columnTasks = tasks.filter(task => task.status === col.id)
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className="flex gap-6 overflow-x-auto pb-4">
+          {COLUMNS.map((col) => {
+            const columnTasks = tasks.filter(task => task.status === col.id)
 
-          return (          
-          <div
-            key={col.id} //Column background settings
+            return (
+              <div
+                key={col.id} //Column background settings
 
-            className="flex-shrink-0 w-80 h-150 bg-gray-200/50 rounded-xl p-4 flex flex-col" 
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-semibold">{col.title}</h2>
-              {/*Task counter badge  */}
-              <span className="bg-gray-300 text-gray-700 text-xs font-bold px-2 py-1 rounded-full">
-                {columnTasks.length}
-              </span>
-            </div>
+                className="flex-shrink-0 w-80 min-h-[70vh] bg-gray-200/50 rounded-xl p-4 flex-3 flex-col"
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-semibold">{col.title}</h2>
+                  {/*Task counter badge  */}
+                  <span className="bg-gray-300 text-gray-700 text-xs font-bold px-2 py-1 rounded-full">
+                    {columnTasks.length}
+                  </span>
+                </div>
 
+                <Droppable droppableId={col.id}>
+                  {(provided) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className="flex-1 min-h-[200px] flex flex-col gap-3"
+                    >
+                      {columnTasks.map((task, index) => (
+                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                          {(provided) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"
+                            >
+                              <p className="text-sm font-medium">{task.title}</p>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
 
-            <div className="flex-1 min-h-[200px] flex flex-col gap-3">
-              {columnTasks.length === 0 ? (
-                <div className="text-sm text-gray-500 italic text-center mt-4">No tasks yet</div>
-              ) : (
-                columnTasks.map(task => (
-                  <div key={task.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                    <p className="text-sm font-medium">{task.title}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          )  
-        })}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            )
+          })}
+        </div>
+      </DragDropContext>
     </div>
-  </div>
   )
 }
